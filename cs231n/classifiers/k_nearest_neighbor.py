@@ -1,5 +1,5 @@
 import numpy as np
-from past.builtins import xrange
+#from past.builtins import xrange
 
 
 class KNearestNeighbor(object):
@@ -65,14 +65,15 @@ class KNearestNeighbor(object):
     num_test = X.shape[0]
     num_train = self.X_train.shape[0]
     dists = np.zeros((num_test, num_train))
-    for i in xrange(num_test):
-      for j in xrange(num_train):
+    for i in range(num_test):
+      for j in range(num_train):
         #####################################################################
         # TODO:                                                             #
         # Compute the l2 distance between the ith test point and the jth    #
         # training point, and store the result in dists[i, j]. You should   #
         # not use a loop over dimension.                                    #
         #####################################################################
+        dists[i,j] = (((self.X_train[j] - X[i])**2).sum())**0.5
         pass
         #####################################################################
         #                       END OF YOUR CODE                            #
@@ -89,16 +90,18 @@ class KNearestNeighbor(object):
     num_test = X.shape[0]
     num_train = self.X_train.shape[0]
     dists = np.zeros((num_test, num_train))
-    for i in xrange(num_test):
+    for i in range(num_test):
       #######################################################################
       # TODO:                                                               #
       # Compute the l2 distance between the ith test point and all training #
       # points, and store the result in dists[i, :].                        #
       #######################################################################
+      dists[i] = ((X[i] - self.X_train)**2).sum(axis = 1)**0.5
       pass
       #######################################################################
       #                         END OF YOUR CODE                            #
       #######################################################################
+    print(dists.shape)
     return dists
 
   def compute_distances_no_loops(self, X):
@@ -123,6 +126,11 @@ class KNearestNeighbor(object):
     # HINT: Try to formulate the l2 distance using matrix multiplication    #
     #       and two broadcast sums.                                         #
     #########################################################################
+    #This should be fine, but results in memeory error
+    # dists = ((X[:,np.newaxis,:] - self.X_train[np.newaxis,:,:])**2).sum(axis=2)**0.5
+    dists_sqrd =  (X ** 2).sum(axis=1)[:,np.newaxis] +\
+             (self.X_train ** 2).sum(axis=1)[np.newaxis,:] - 2 * X @ self.X_train.T
+    dists = dists_sqrd**0.5
     pass
     #########################################################################
     #                         END OF YOUR CODE                              #
@@ -144,7 +152,7 @@ class KNearestNeighbor(object):
     """
     num_test = dists.shape[0]
     y_pred = np.zeros(num_test)
-    for i in xrange(num_test):
+    for i in range(num_test):
       # A list of length k storing the labels of the k nearest neighbors to
       # the ith test point.
       closest_y = []
@@ -155,6 +163,8 @@ class KNearestNeighbor(object):
       # neighbors. Store these labels in closest_y.                           #
       # Hint: Look up the function numpy.argsort.                             #
       #########################################################################
+      kneighbors = np.argsort(dists[i])[:k]
+      closest_y = self.y_train[kneighbors]
       pass
       #########################################################################
       # TODO:                                                                 #
@@ -164,6 +174,9 @@ class KNearestNeighbor(object):
       # label.                                                                #
       #########################################################################
       pass
+      (values, counts) = np.unique(closest_y, return_counts=True)
+      ind = np.argmax(counts)
+      y_pred[i] = values[ind]
       #########################################################################
       #                           END OF YOUR CODE                            # 
       #########################################################################

@@ -1,0 +1,11 @@
+conda create -n cs231 python=3.6.4
+activate cs231
+conda install ipykernel
+python -m ipykernel install --user --name cs231 --display-name "cs231"
+conda install numpy
+conda install scipy
+conda install Pillow
+conda install matplotlib
+
+replace xrange with range (if working with python3)
+
