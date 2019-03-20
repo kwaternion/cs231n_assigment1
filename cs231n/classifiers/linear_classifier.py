@@ -1,4 +1,4 @@
-from __future__ import print_function
+# from __future__ import print_function
 
 import numpy as np
 from cs231n.classifiers.linear_svm import *
@@ -38,7 +38,7 @@ class LinearClassifier(object):
 
     # Run stochastic gradient descent to optimize W
     loss_history = []
-    for it in xrange(num_iters):
+    for it in range(num_iters):
       X_batch = None
       y_batch = None
 
@@ -53,6 +53,11 @@ class LinearClassifier(object):
       # Hint: Use np.random.choice to generate indices. Sampling with         #
       # replacement is faster than sampling without replacement.              #
       #########################################################################
+      indices = np.arange(X.shape[0])
+      indices_batch = np.random.choice(indices, replace=True, size=batch_size)
+      X_batch = X[indices_batch]
+      y_batch = y[indices_batch]
+
       pass
       #########################################################################
       #                       END OF YOUR CODE                                #
@@ -67,6 +72,8 @@ class LinearClassifier(object):
       # TODO:                                                                 #
       # Update the weights using the gradient and the learning rate.          #
       #########################################################################
+      self.W += -learning_rate * grad
+
       pass
       #########################################################################
       #                       END OF YOUR CODE                                #
@@ -96,6 +103,7 @@ class LinearClassifier(object):
     # TODO:                                                                   #
     # Implement this method. Store the predicted labels in y_pred.            #
     ###########################################################################
+    y_pred = np.argmax(X.dot(self.W), axis=1)
     pass
     ###########################################################################
     #                           END OF YOUR CODE                              #
