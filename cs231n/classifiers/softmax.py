@@ -1,6 +1,6 @@
 import numpy as np
-from random import shuffle
-from past.builtins import xrange
+# from random import shuffle
+# from past.builtins import xrange
 
 def softmax_loss_naive(W, X, y, reg):
   """
@@ -30,6 +30,29 @@ def softmax_loss_naive(W, X, y, reg):
   # here, it is easy to run into numeric instability. Don't forget the        #
   # regularization!                                                           #
   #############################################################################
+  num_train = X.shape[0]
+  num_class = W.shape[1]
+
+  for i in range(num_train):
+    scores = X[i].dot(W)
+    scores_norm = scores - np.max(scores)
+    score_corr = scores_norm[y[i]]
+    exp_loss = np.exp(score_corr)/((np.exp(scores_norm)).sum())
+    loss += -np.log(exp_loss)
+    for k in range(num_class):  #W = DxC
+        if k == y[i]:
+          t = 1
+        else:
+          t = 0
+        exp_loss_all = np.exp(scores_norm[k]) / ((np.exp(scores_norm)).sum())
+        dW[:,k] += (exp_loss_all - t) * X[i]
+
+  loss /= num_train
+  loss += reg * np.sum(W * W)
+
+  dW /= num_train
+  dW += 2 * reg * W
+
   pass
   #############################################################################
   #                          END OF YOUR CODE                                 #
@@ -54,6 +77,24 @@ def softmax_loss_vectorized(W, X, y, reg):
   # here, it is easy to run into numeric instability. Don't forget the        #
   # regularization!                                                           #
   #############################################################################
+  ##  X = NxD, W = DxC, y =N
+  num_train = X.shape[0]
+  scores = X.dot(W)  #NxC
+  scores_norm = scores - np.max(scores, axis=1, keepdims=True)  #NxC
+  corr_indices = (np.arange(scores.shape[0]), y) #N tupes two elements (sample, correct class)
+  score_corr = scores_norm[corr_indices]  # N
+  exp_loss = np.exp(score_corr)/((np.exp(scores_norm)).sum(axis=1)) # N
+  loss = -np.log(exp_loss).sum()
+  loss /= num_train
+  loss += reg * np.sum(W * W)
+
+
+  exp_loss_all = np.exp(scores_norm) / ((np.exp(scores_norm)).sum(axis=1, keepdims=True))  # NxC
+  corr_matrix = np.zeros_like(exp_loss_all)
+  corr_matrix[corr_indices] = 1
+  dW = X.T.dot(exp_loss_all - corr_matrix)
+  dW /= num_train
+  dW += 2 * reg * W
   pass
   #############################################################################
   #                          END OF YOUR CODE                                 #
