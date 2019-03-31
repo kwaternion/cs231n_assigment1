@@ -174,6 +174,25 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # variance, storing your result in the running_mean and running_var   #
         # variables.                                                          #
         #######################################################################
+        # sample_mean = x.mean(axis=0, keepdims=True)
+        # sample_var = x.var(axis=0, keepdims=True)
+        # sample_corr = (x - sample_mean)/np.sqrt(sample_var + eps)
+        # out = sample_corr * gamma + beta
+        mu = 1 / N * x.sum(axis=0)  # D
+        xmu = x - mu  # NxD
+        sxum = xmu**2  # NxD
+        var = 1 / N * sxum.sum(axis=0)  # D
+        var_eps = var + eps  # D
+        rootvar = var_eps ** 0.5
+        inv = 1 / rootvar
+        xnorm = inv * xmu
+        xscaled = xnorm * gamma
+        out = xscaled + beta
+
+        # cache = (mu, xmu, sxum, var, var_eps, rootvar, inv, xnorm, xscaled, out, eps, gamma)
+        cache = (xmu, var_eps, rootvar, inv, xnorm, gamma)
+        running_mean = momentum * running_mean + (1 - momentum) * mu
+        running_var = momentum * running_var + (1 - momentum) * var
         pass
         #######################################################################
         #                           END OF YOUR CODE                          #
@@ -185,6 +204,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         # then scale and shift the normalized data using gamma and beta.      #
         # Store the result in the out variable.                               #
         #######################################################################
+        out = ((x - running_mean)/np.sqrt(running_var + eps)) * gamma + beta
         pass
         #######################################################################
         #                          END OF YOUR CODE                           #
@@ -221,6 +241,31 @@ def batchnorm_backward(dout, cache):
     # TODO: Implement the backward pass for batch normalization. Store the    #
     # results in the dx, dgamma, and dbeta variables.                         #
     ###########################################################################
+    # sample_corr = cache[0]
+    # dbeta = dout.sum(axis=0)
+    # dgamma = (sample_corr * dout).sum(axis=0)
+    # dx = 0
+    #
+    # print(dout.shape, "dgamma: ", dgamma.shape, "dbeta:", dbeta.shape)
+    xmu, var_eps, rootvar, inv, xnorm, gamma = cache
+    N, D = xmu.shape
+    dbeta = dout.sum(axis=0)
+    dxscaled = dout
+    dgamma = (dxscaled * xnorm).sum(axis=0)
+    dxnorm = dxscaled * gamma
+    dinv = (dxnorm * xmu).sum(axis=0)
+    drootvar = dinv * (-1 / rootvar ** 2)
+    dvar_eps = drootvar * 0.5 * var_eps ** -0.5
+    dvar = dvar_eps
+    dsxmu = dvar * np.ones_like(dx) / N
+    dxmu1 = dxnorm * inv
+    dxmu2 = dsxmu * 2 * xmu
+    dxmu = dxmu1 + dxmu2
+    dmu = - dxmu.sum(axis=0)
+    dx1 = dxmu
+    dx2 = dmu * np.ones_like(dx) / N
+    dx = dx1 + dx2
+
     pass
     ###########################################################################
     #                             END OF YOUR CODE                            #

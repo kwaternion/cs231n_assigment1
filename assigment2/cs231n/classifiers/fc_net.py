@@ -121,6 +121,32 @@ class TwoLayerNet(object):
 
         return loss, grads
 
+def affine_batch_norm_relu_forward(x, w, b, gamma, beta, bn_param):
+    """
+    Convenience layer that performs an affine transform followed by batch norm and then a ReLU
+    Inputs:
+    - x: Input to the affine layer
+    - w, b: Weights for the affine layer
+
+    Returns a tuple of:
+    - out: Output from the ReLU
+    - cache: Object to give to the backward pass
+    """
+    a, fc_cache = affine_forward(x, w, b)
+    norm, batch_cache = batchnorm_forward(a, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(norm)
+    cache = (fc_cache, batch_cache, relu_cache)
+    return out, cache
+
+
+def affine_batch_relu_backward(dout, cache):
+    """
+    Backward pass for the affine-batch-relu convenience layer
+    """
+    fc_cache, relu_cache = cache
+    da = relu_backward(dout, relu_cache)
+    dx, dw, db = affine_backward(da, fc_cache)
+    return dx, dw, db
 
 class FullyConnectedNet(object):
     """
@@ -183,15 +209,15 @@ class FullyConnectedNet(object):
         self.num_hidden = len(hidden_dims)
         for i in range(self.num_hidden):
             if i == 0:
-                self.params["W"+str(i+1)] = weight_scale * np.random.randn(input_dim, hidden_dims[i])
+                self.params["W"+str(i)] = weight_scale * np.random.randn(input_dim, hidden_dims[i])
             else:
-                self.params["W"+str(i+1)] = weight_scale * np.random.randn(hidden_dims[i-1], hidden_dims[i])
-            self.params["b"+str(i+1)] = np.zeros(hidden_dims[i])
+                self.params["W"+str(i)] = weight_scale * np.random.randn(hidden_dims[i-1], hidden_dims[i])
+            self.params["b"+str(i)] = np.zeros(hidden_dims[i])
             # if self.use_batchnorm:
-            #     self.params["gamma" + str(i + 1)] = 1
-            #     self.params["beta" + str(i + 1)] = 0   #maybe also should be added at the class level layer (below)
-        self.params["W" + str(self.num_hidden + 1)] = weight_scale * np.random.randn(hidden_dims[-1], num_classes)
-        self.params["b" + str(self.num_hidden + 1)] = np.zeros(num_classes)
+            #     self.params["gamma" + str(i)] = np.ones(self.params["b"+str(i)].shape)
+            #     self.params["beta" + str(i)] = np.zeros(self.params["b"+str(i)].shape)   #maybe also should be added at the class level layer (below)
+        self.params["W" + str(self.num_hidden)] = weight_scale * np.random.randn(hidden_dims[-1], num_classes)
+        self.params["b" + str(self.num_hidden)] = np.zeros(num_classes)
 
         pass
         ############################################################################
@@ -255,12 +281,19 @@ class FullyConnectedNet(object):
         res = X
         reg_sum = 0
         for i in range(self.num_hidden):
-            i += 1
             w, b = self.params["W"+str(i)], self.params["b"+str(i)]
+            # if self.use_batchnorm:
+            #     print(i)
+            #     bn_param = self.bn_params[i-1]
+            #     gamma = self.params["gamma" + str(i)]
+            #     beta = self.params["beta" + str(i)]
+            #     res, cache_temp = affine_batch_norm_relu_forward(res, w, b, gamma, beta, bn_param)
+            # else:
+            #     print('else')
             res, cache_temp = affine_relu_forward(res, w, b)
             cache_arr.append(cache_temp)
             reg_sum += 0.5 * (w ** 2).sum()
-        w, b = self.params["W" + str(self.num_hidden + 1)], self.params["b" + str(self.num_hidden + 1)]
+        w, b = self.params["W" + str(self.num_hidden)], self.params["b" + str(self.num_hidden)]
         scores, cache_last = affine_forward(res, w, b)
         reg_sum += 0.5 * (w ** 2).sum()
 
@@ -289,12 +322,23 @@ class FullyConnectedNet(object):
         ############################################################################
         loss, dout = softmax_loss(scores, y)  # dx = NxC
         loss += self.reg * reg_sum
-        dout, grads["W" + str(self.num_hidden + 1)], grads["b" + str(self.num_hidden + 1)] = affine_backward(dout, cache_last)
+        dout, grads["W" + str(self.num_hidden)], grads["b" + str(self.num_hidden)] = affine_backward(dout, cache_last)
+        # print()
+        grads["W" + str(self.num_hidden)] += self.reg * self.params["W" + str(self.num_hidden)]
 
         for i in range(self.num_hidden):
-            layer = self.num_hidden - i
-            dout, grads["W" + str(layer)], grads["b" + str(layer)] = affine_relu_backward(dout, cache_arr[layer - 1])
+            layer = self.num_hidden - i - 1
+            # if self.use_batchnorm:
+            #     dout, grads["W" + str(layer)], grads["b" + str(layer)] = \
+            #         affine_batch_norm_relu_backward(dout, cache_arr[layer - 1])
+            # else:
+            dout, grads["W" + str(layer)], grads["b" + str(layer)] = affine_relu_backward(dout, cache_arr[layer ])
             grads["W" + str(layer)] += self.reg * self.params["W" + str(layer)]
+            # print(str(layer))
+        # dout, grads["W" + self.num_hidden], grads["b" + self.num_hidden] = affine_relu_backward(dout, cache_arr[self.num_hidden-1])
+        # dout, grads["W" + str(layer)], grads["b" + str(layer)] = affine_relu_backward(dout, cache_arr[layer - 1])
+
+        # grads["W" + self.num_hidden] += self.reg * self.params["W" + self.num_hidden]
         pass
         ############################################################################
         #                             END OF YOUR CODE                             #
