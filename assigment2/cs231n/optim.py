@@ -134,7 +134,7 @@ def adam(x, dx, config=None):
     config.setdefault('beta2', 0.999)
     config.setdefault('epsilon', 1e-8)
     config.setdefault('m', np.zeros_like(x))
-    config.setdefault('v', np.zeros_like(x))
+    config.setdefault('v', np.zeros_like(x, dtype=float))
     config.setdefault('t', 1)
 
     next_x = None
