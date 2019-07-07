@@ -1,6 +1,7 @@
 from builtins import range
 import numpy as np
-
+from numba import njit
+from time import time
 
 def affine_forward(x, w, b):
     """
@@ -407,11 +408,74 @@ def conv_forward_naive(x, w, b, conv_param):
     # TODO: Implement the convolutional forward pass.                         #
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
+    N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    F, C, HH, WW = w.shape[0], w.shape[1], w.shape[2], w.shape[3]
+    stride, pad = conv_param["stride"], conv_param["pad"]
+    Hout = int(1 + (H + 2 * pad - HH) / stride)
+    Vout = int(1 + (W + 2 * pad - WW) / stride)
+
+    def conv_explicite():
+        out = np.zeros((N, F, Hout, Vout), dtype=x.dtype)
+        xpad = np.pad(x, ((0,0),(0,0), (pad, pad), (pad,pad)), mode='constant', constant_values=0)
+        xpad_ax = xpad[:, np.newaxis, :, :, :]
+        for H in range(Hout):
+            for V in range(Vout):
+                x_seg = xpad_ax[:, :, :, H * stride:H * stride + HH, V * stride:V * stride + WW]
+                # x_seg[:,np.newaxis,:,:,:] = (N,1,C,HH,WW) * w(F,C,HH,WW) = (N,F,C,HH,WW)
+                # resulting in array (N,F,C,HH,WW), then summed values over axis 2,3,4, resulting in array (N,C) + b(C)=out
+                out[:, :, H, V] = (x_seg * w).sum(axis=(2, 3, 4)) + b
+        return out
+
+
+    def conv_inefficient():
+        N, C, H, W = x.shape
+        F, _, HH, WW = w.shape
+        stride = conv_param.get('stride', 1)
+        pad = conv_param.get('pad', 0)
+        # Check for parameter sanity
+        assert (H + 2 * pad - HH) % stride == 0, 'Sanity Check Status: Conv Layer Failed in Height'
+        assert (W + 2 * pad - WW) % stride == 0, 'Sanity Check Status: Conv Layer Failed in Width'
+        H_prime = 1 + (H + 2 * pad - HH) // stride
+        W_prime = 1 + (W + 2 * pad - WW) // stride
+        # Padding
+        x_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), 'constant', constant_values=0)
+        out = np.zeros((N, F, H_prime, W_prime))
+        # Naive Loops
+        for n in range(N):
+            for f in range(F):
+                for j in range(0, H_prime):
+                    for i in range(0, W_prime):
+                        out[n, f, j, i] = (x_pad[n, :, j * stride:j * stride + HH, i * stride:i * stride + WW] * w[f, :, :, :]).sum() + b[f]
+
+        return out
+
+    out = conv_explicite()
+    #out = conv_inefficient()
     pass
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
     cache = (x, w, b, conv_param)
+    return out, cache
+
+
+@njit
+def conv_forward_naive_jit(x, xpad_ax, w, b, stride, pad):
+    N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    F, C, HH, WW = w.shape[0], w.shape[1], w.shape[2], w.shape[3]
+    Hout = int(1 + (H + 2 * pad - HH) / stride)
+    Vout = int(1 + (W + 2 * pad - WW) / stride)
+    H_prime = 1 + (H + 2 * pad - HH) // stride
+    W_prime = 1 + (W + 2 * pad - WW) // stride
+    out = np.zeros((N, F, H_prime, W_prime))
+    def inner():
+        for H in range(Hout):
+            for V in range(Vout):
+                x_seg = xpad_ax[:, :, :, H * stride:H * stride + HH, V * stride:V * stride + WW]
+                out[:, :, H, V] = (x_seg * w).sum(axis=2).sum(axis=2).sum(axis=2) + b
+        return out
+    out = inner()
+    cache = (x, w, b)
     return out, cache
 
 
@@ -432,6 +496,25 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
+    # dout = N,F,HH,WW (4,2,5,5),
+    # dx = x = N,C,H,W (4,3,5,5)
+    # dw = w = F, C, HH, WW
+    x, w, b, conv_param = cache
+    dx = x*0;
+    dw = w*0;
+    stride, pad = conv_param["stride"], conv_param["pad"]
+    # N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    F, C, HH, WW = w.shape[0], w.shape[1], w.shape[2], w.shape[3]
+    dxpad = np.pad(dx, ((0,0),(0,0), (pad, pad), (pad,pad)), mode='constant', constant_values=0)
+    dxpad_ax = dxpad[:, np.newaxis, :, :, :]
+
+    for H in range(Hout):
+        for V in range(Vout):
+            dx_seg = dxpad_ax[:, :, :, H * stride:H * stride + HH, V * stride:V * stride + WW]
+            # x_seg[:,np.newaxis,:,:,:] = (N,1,C,HH,WW) * w(F,C,HH,WW) = (N,F,C,HH,WW)
+            # resulting in array (N,F,C,HH,WW), then summed vales over axis 2,3,4, resulting in array (N,C) + b(C)=out
+            dw[:, :, H, V] = (dx_seg * np.ones_like(w)).sum(axis=(1, 3, 4))
+
     pass
     ###########################################################################
     #                             END OF YOUR CODE                            #

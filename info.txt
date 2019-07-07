@@ -6,6 +6,9 @@ conda install numpy
 conda install scipy
 conda install Pillow
 conda install matplotlib
+conda install imageio
+
+#numba
 
 replace xrange with range (if working with python3)
 
