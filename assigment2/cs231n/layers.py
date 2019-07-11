@@ -459,7 +459,7 @@ def conv_forward_naive(x, w, b, conv_param):
     return out, cache
 
 
-@njit
+# @njit
 def conv_forward_naive_jit(x, xpad_ax, w, b, stride, pad):
     N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
     F, C, HH, WW = w.shape[0], w.shape[1], w.shape[2], w.shape[3]
@@ -467,13 +467,13 @@ def conv_forward_naive_jit(x, xpad_ax, w, b, stride, pad):
     Vout = int(1 + (W + 2 * pad - WW) / stride)
     H_prime = 1 + (H + 2 * pad - HH) // stride
     W_prime = 1 + (W + 2 * pad - WW) // stride
-    out = np.zeros((N, F, H_prime, W_prime))
     def inner():
+        out2 = np.zeros((N, F, H_prime, W_prime))
         for H in range(Hout):
             for V in range(Vout):
                 x_seg = xpad_ax[:, :, :, H * stride:H * stride + HH, V * stride:V * stride + WW]
-                out[:, :, H, V] = (x_seg * w).sum(axis=2).sum(axis=2).sum(axis=2) + b
-        return out
+                out2[:, :, H, V] = (x_seg * w).sum(axis=2).sum(axis=2).sum(axis=2) + b
+        return out2
     out = inner()
     cache = (x, w, b)
     return out, cache
@@ -496,24 +496,35 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    # dout = N,F,HH,WW (4,2,5,5),
+    # dout = N,F,H',W' (4,2,5,5),
     # dx = x = N,C,H,W (4,3,5,5)
-    # dw = w = F, C, HH, WW
+    # dw = w = F, C, HH, WW (2,3,3,3)
+    # db = b = F
     x, w, b, conv_param = cache
-    dx = x*0;
-    dw = w*0;
     stride, pad = conv_param["stride"], conv_param["pad"]
-    # N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
+    N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
     F, C, HH, WW = w.shape[0], w.shape[1], w.shape[2], w.shape[3]
-    dxpad = np.pad(dx, ((0,0),(0,0), (pad, pad), (pad,pad)), mode='constant', constant_values=0)
-    dxpad_ax = dxpad[:, np.newaxis, :, :, :]
+    H_out, W_out = dout.shape[2], dout.shape[3],
+    dw = w * 0
+    dx = x * 0
 
-    for H in range(Hout):
-        for V in range(Vout):
-            dx_seg = dxpad_ax[:, :, :, H * stride:H * stride + HH, V * stride:V * stride + WW]
-            # x_seg[:,np.newaxis,:,:,:] = (N,1,C,HH,WW) * w(F,C,HH,WW) = (N,F,C,HH,WW)
-            # resulting in array (N,F,C,HH,WW), then summed vales over axis 2,3,4, resulting in array (N,C) + b(C)=out
-            dw[:, :, H, V] = (dx_seg * np.ones_like(w)).sum(axis=(1, 3, 4))
+    paddxHH = HH - pad - 1
+    paddxWW = WW - pad - 1
+    print(paddxHH)
+    dxpad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant', constant_values=0)
+    dxpad_ax = dxpad[:, np.newaxis, :, :, :]
+    dout_ax = dout[:, :, np.newaxis, :, :]
+    for hh in range(HH):
+        for ww in range(WW):
+            dx_seg = dxpad_ax[:, :, :, hh:hh + H_out*stride:stride, ww:ww + W_out*stride:stride]
+            dw[:, :, hh, ww] = (dx_seg * dout_ax).sum(axis=(0, 3, 4))
+
+    # for h in range(H):
+    #     for w in range(W):
+    #         dx_seg = dxpad_ax[:, :, :, hh:hh + H:stride, ww:ww + W:stride]
+    #         dx[:, :, h, w] = (dx_seg * dout_ax).sum(axis=(0, 3, 4))
+
+    db = dout.sum(axis=(0, 2, 3))
 
     pass
     ###########################################################################
