@@ -503,26 +503,51 @@ def conv_backward_naive(dout, cache):
     x, w, b, conv_param = cache
     stride, pad = conv_param["stride"], conv_param["pad"]
     N, C, H, W = x.shape[0], x.shape[1], x.shape[2], x.shape[3]
-    F, C, HH, WW = w.shape[0], w.shape[1], w.shape[2], w.shape[3]
+    F, C, Kh, Kv = w.shape[0], w.shape[1], w.shape[2], w.shape[3]
     H_out, W_out = dout.shape[2], dout.shape[3],
-    dw = w * 0
+    # print("X shape", x.shape)    dw = w * 0
     dx = x * 0
+    dw = w * 0
+    paddxKh= Kh - pad - 1
+    paddxKv= Kv - pad - 1
+    wpad = np.pad(w, ((0, 0), (0, 0), (paddxKh, paddxKv), (paddxKh, paddxKv)), mode='constant', constant_values=0)
+    xpad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant', constant_values=0)
 
-    paddxHH = HH - pad - 1
-    paddxWW = WW - pad - 1
-    print(paddxHH)
-    dxpad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant', constant_values=0)
-    dxpad_ax = dxpad[:, np.newaxis, :, :, :]
+    xpad_ax = xpad[:, np.newaxis, :, :, :]
+    wpad_ax = wpad[:, np.newaxis, :, :, :]
+
     dout_ax = dout[:, :, np.newaxis, :, :]
-    for hh in range(HH):
-        for ww in range(WW):
-            dx_seg = dxpad_ax[:, :, :, hh:hh + H_out*stride:stride, ww:ww + W_out*stride:stride]
+    for hh in range(Kh):
+        for ww in range(Kv):
+            dx_seg = xpad_ax[:, :, :, hh:hh + H_out*stride:stride, ww:ww + W_out*stride:stride]
             dw[:, :, hh, ww] = (dx_seg * dout_ax).sum(axis=(0, 3, 4))
 
-    # for h in range(H):
-    #     for w in range(W):
-    #         dx_seg = dxpad_ax[:, :, :, hh:hh + H:stride, ww:ww + W:stride]
-    #         dx[:, :, h, w] = (dx_seg * dout_ax).sum(axis=(0, 3, 4))
+    print("dout", dout.shape)
+    print("x", x.shape)
+    # print("w", w.shape)
+    print(conv_param)
+    dim_kh, dim_kv = w.shape[2], w.shape[3]
+    pfull_h = (stride - 1) * (dim_kh - 1) + dim_kh - 1
+    pfull_v = (stride - 1) * (dim_kv - 1) + dim_kv - 1
+    print("pfull_h", pfull_h)
+    dout_pad = np.pad(dout, ((0, 0), (0, 0), (pfull_h, pfull_h), (pfull_v, pfull_v)), mode='constant', constant_values=0)
+    dout_pad_ax = dout_pad[:, :, np.newaxis, :, :]
+    print("dout_pad", dout_pad_ax.shape)
+    dx_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant', constant_values=0)
+    print("dx_pad", dx_pad.shape)
+    dimdx_h, dimdx_v = dx_pad.shape[2], dx_pad.shape[3]
+    print("dimdx_h", dimdx_h, "dimdx_v", dimdx_v)
+    for hh in range(dimdx_h):
+        for ww in range(dimdx_v):
+            dout_seg = dout_pad_ax[:, :, :, hh*stride:hh*stride + dim_kh*stride:stride, ww*stride:ww*stride + dim_kv*stride:stride]
+            print("dout_seg", dout_seg.shape)
+            print("w.shape", w.shape)
+            res = (dout_seg * w[:, :, ::-1, ::-1]).sum(axis=(1, 3, 4))
+            # print("res size", res.shape)
+            dx_pad[:, :, hh, ww] = res
+    print("dx_pad.shape", dx_pad.shape)
+    dx = dx_pad[:, :, pad:-pad, pad:-pad]
+    print("dx", dx.shape)
 
     db = dout.sum(axis=(0, 2, 3))
 
