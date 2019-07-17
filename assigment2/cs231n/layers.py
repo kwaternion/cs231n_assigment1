@@ -527,27 +527,32 @@ def conv_backward_naive(dout, cache):
     # print("w", w.shape)
     print(conv_param)
     dim_kh, dim_kv = w.shape[2], w.shape[3]
-    pfull_h = (stride - 1) * (dim_kh - 1) + dim_kh - 1
-    pfull_v = (stride - 1) * (dim_kv - 1) + dim_kv - 1
-    print("pfull_h", pfull_h)
-    dout_pad = np.pad(dout, ((0, 0), (0, 0), (pfull_h, pfull_h), (pfull_v, pfull_v)), mode='constant', constant_values=0)
+    pfull_h = dim_kh - 1
+    pfull_v = dim_kv - 1
+    # print("pfull_h", pfull_h)
+    dout_pad_interleave = np.zeros((dout.shape[0], dout.shape[1],
+                                    stride * (dout.shape[2] - 1) + 1,
+                                    stride * (dout.shape[3] - 1) + 1))
+    dout_pad_interleave[:, :, ::stride, ::stride] = dout
+    # print("dout_pad_interleave", dout_pad_interleave.shape)
+    dout_pad = np.pad(dout_pad_interleave, ((0, 0), (0, 0), (pfull_h, pfull_h), (pfull_v, pfull_v)), mode='constant', constant_values=0)
     dout_pad_ax = dout_pad[:, :, np.newaxis, :, :]
-    print("dout_pad", dout_pad_ax.shape)
+    # print("dout_pad", dout_pad_ax.shape)
     dx_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), mode='constant', constant_values=0)
-    print("dx_pad", dx_pad.shape)
+    # print("dx_pad", dx_pad.shape)
     dimdx_h, dimdx_v = dx_pad.shape[2], dx_pad.shape[3]
-    print("dimdx_h", dimdx_h, "dimdx_v", dimdx_v)
+    # print("dimdx_h", dimdx_h, "dimdx_v", dimdx_v)
     for hh in range(dimdx_h):
         for ww in range(dimdx_v):
-            dout_seg = dout_pad_ax[:, :, :, hh*stride:hh*stride + dim_kh*stride:stride, ww*stride:ww*stride + dim_kv*stride:stride]
-            print("dout_seg", dout_seg.shape)
-            print("w.shape", w.shape)
+            dout_seg = dout_pad_ax[:, :, :, hh:hh + dim_kh, ww:ww + dim_kv]
+            # print("dout_seg", dout_seg.shape)
+            # print("w.shape", w.shape)
             res = (dout_seg * w[:, :, ::-1, ::-1]).sum(axis=(1, 3, 4))
             # print("res size", res.shape)
             dx_pad[:, :, hh, ww] = res
-    print("dx_pad.shape", dx_pad.shape)
+    # print("dx_pad.shape", dx_pad.shape)
     dx = dx_pad[:, :, pad:-pad, pad:-pad]
-    print("dx", dx.shape)
+    # print("dx", dx.shape)
 
     db = dout.sum(axis=(0, 2, 3))
 
