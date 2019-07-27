@@ -1,9 +1,12 @@
 from builtins import object
 import numpy as np
+import sys
+import os
+sys.path.append(os.path.dirname(os.getcwd()))
 
-from cs231n.layers import *
-from cs231n.fast_layers import *
-from cs231n.layer_utils import *
+from cs231n.layers import relu_forward, affine_forward, softmax_loss, affine_backward
+from cs231n.layer_utils import affine_relu_forward, conv_relu_pool_forward, conv_relu_pool_backward, affine_relu_backward
+
 
 
 class ThreeLayerConvNet(object):
@@ -52,6 +55,12 @@ class ThreeLayerConvNet(object):
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
+        self.params['W1'] = weight_scale * np.random.randn(num_filters, input_dim[0], filter_size, filter_size)
+        self.params['b1'] = np.zeros(num_filters)
+        self.params['W2'] = weight_scale * np.random.randn(num_filters * int(input_dim[1]/2 * input_dim[1]/2), hidden_dim)
+        self.params['b2'] = np.zeros(hidden_dim)
+        self.params['W3'] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params['b3'] = np.zeros(num_classes)
 
         for k, v in self.params.items():
             self.params[k] = v.astype(dtype)
@@ -80,6 +89,10 @@ class ThreeLayerConvNet(object):
         # computing the class scores for X and storing them in the scores          #
         # variable.                                                                #
         ############################################################################
+        # conv - relu - 2x2 max pool - affine - relu - affine - softmax
+        out1, cache1 = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
+        out2, cache2 = affine_relu_forward(out1, W2, b2)
+        scores, cache3 = affine_forward(out2, W3, b3)
         pass
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -89,6 +102,10 @@ class ThreeLayerConvNet(object):
             return scores
 
         loss, grads = 0, {}
+        loss, dout3 = softmax_loss(scores, y)
+        loss += self.reg * (0.5 * (self.params["W1"]**2).sum() + 0.5 * (self.params["W2"]**2).sum()
+                            + 0.5 * (self.params["W3"]**2).sum())
+
         ############################################################################
         # TODO: Implement the backward pass for the three-layer convolutional net, #
         # storing the loss and gradients in the loss and grads variables. Compute  #
@@ -99,5 +116,14 @@ class ThreeLayerConvNet(object):
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
+        dout2, grads["W3"], grads["b3"] = affine_backward(dout3, cache3)
+        grads["W3"] += self.reg * self.params["W3"]
+
+        dout1, grads["W2"], grads["b2"] = affine_relu_backward(dout2, cache2)
+        grads["W2"] += self.reg * self.params["W2"]
+
+        dout0, grads["W1"], grads["b1"] = conv_relu_pool_backward(dout1, cache1)
+        grads["W1"] += self.reg * self.params["W1"]
+
 
         return loss, grads
