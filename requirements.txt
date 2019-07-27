@@ -6,3 +6,4 @@ ipykernel
 scipy
 future
 cython
+pytorch

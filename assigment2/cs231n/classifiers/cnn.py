@@ -5,7 +5,9 @@ import os
 sys.path.append(os.path.dirname(os.getcwd()))
 
 from cs231n.layers import relu_forward, affine_forward, softmax_loss, affine_backward
-from cs231n.layer_utils import affine_relu_forward, conv_relu_pool_forward, conv_relu_pool_backward, affine_relu_backward
+from cs231n.layer_utils import affine_relu_forward, conv_relu_pool_forward, conv_relu_pool_backward,\
+    affine_relu_backward, conv_relu_forward, conv_relu_backward
+from cs231n.fast_layers import conv_forward_strides, conv_backward_strides
 
 
 
@@ -125,5 +127,72 @@ class ThreeLayerConvNet(object):
         dout0, grads["W1"], grads["b1"] = conv_relu_pool_backward(dout1, cache1)
         grads["W1"] += self.reg * self.params["W1"]
 
+
+        return loss, grads
+
+
+class FourLayerConvNetSpatBN(object):
+    def __init__(self, input_dim=(3, 32, 32), num_filters_in=16, num_filters=32, filter_size=7,
+                 hidden_dim=100, num_classes=10, weight_scale=1e-3, reg=0.0,
+                 dtype=np.float32):
+        self.params = {}
+        self.reg = reg
+        self.dtype = dtype
+
+        self.params['W1'] = weight_scale * np.random.randn(num_filters_in, input_dim[0], filter_size, filter_size)
+        self.params['b1'] = np.zeros(num_filters_in)
+        print("Number of intermediate filters:", num_filters_in)
+
+        self.params['W2'] = weight_scale * np.random.randn(num_filters, num_filters_in, filter_size, filter_size)
+        self.params['b2'] = np.zeros(num_filters)
+
+        self.params['W3'] = weight_scale * np.random.randn(num_filters * int(input_dim[1]/2 * input_dim[1]/2), hidden_dim)
+        self.params['b3'] = np.zeros(hidden_dim)
+
+        self.params['W4'] = weight_scale * np.random.randn(hidden_dim, num_classes)
+        self.params['b4'] = np.zeros(num_classes)
+
+        self.filter_size = filter_size
+
+        for k, v in self.params.items():
+            self.params[k] = v.astype(dtype)
+
+
+    def loss(self, X, y=None):
+        W1, b1 = self.params['W1'], self.params['b1']
+        W2, b2 = self.params['W2'], self.params['b2']
+        W3, b3 = self.params['W3'], self.params['b3']
+        W4, b4 = self.params['W4'], self.params['b4']
+
+        # pass conv_param to the forward pass for the convolutional layer
+        filter_size = self.filter_size
+        conv_param = {'stride': 1, 'pad': (filter_size - 1) // 2}
+        pool_param = {'pool_height': 2, 'pool_width': 2, 'stride': 2}
+
+        # conv - relu - conv - relu - 2x2 max pool - affine - relu - affine - softmax
+        out1, cache1 = conv_forward_strides(X, W1, b1, conv_param)
+        out2, cache2 = conv_relu_pool_forward(out1, W2, b2, conv_param, pool_param)
+        out3, cache3 = affine_relu_forward(out2, W3, b3)
+        scores, cache4 = affine_forward(out3, W4, b4)
+
+        if y is None:
+            return scores
+
+        loss, grads = 0, {}
+        loss, dout4 = softmax_loss(scores, y)
+        loss += self.reg * (0.5 * (self.params["W1"]**2).sum() + 0.5 * (self.params["W2"]**2).sum()
+                            + 0.5 * (self.params["W3"]**2).sum() + 0.5 * (self.params["W4"]**2).sum())
+
+        dout3, grads["W4"], grads["b4"] = affine_backward(dout4, cache4)
+        grads["W4"] += self.reg * self.params["W4"]
+
+        dout2, grads["W3"], grads["b3"] = affine_relu_backward(dout3, cache3)
+        grads["W3"] += self.reg * self.params["W3"]
+
+        dout1, grads["W2"], grads["b2"] = conv_relu_pool_backward(dout2, cache2)
+        grads["W2"] += self.reg * self.params["W2"]
+
+        dout0, grads["W1"], grads["b1"] = conv_backward_strides(dout1, cache1)
+        grads["W1"] += self.reg * self.params["W1"]
 
         return loss, grads
