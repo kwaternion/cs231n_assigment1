@@ -91,10 +91,6 @@ class ThreeLayerConvNet(object):
         # computing the class scores for X and storing them in the scores          #
         # variable.                                                                #
         ############################################################################
-        # conv - relu - 2x2 max pool - affine - relu - affine - softmax
-        out1, cache1 = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
-        out2, cache2 = affine_relu_forward(out1, W2, b2)
-        scores, cache3 = affine_forward(out2, W3, b3)
         pass
         ############################################################################
         #                             END OF YOUR CODE                             #
