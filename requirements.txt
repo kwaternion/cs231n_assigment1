@@ -7,3 +7,4 @@ scipy
 future
 cython
 pytorch
+h5py
